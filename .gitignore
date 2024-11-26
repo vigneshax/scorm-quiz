@@ -11,6 +11,10 @@
 # production
 /build
 
+.zip 
+859-fixquizscore.zip
+1120-updatedui.zip
+813-weightadded.zip
 # misc
 .DS_Store
 .env.local

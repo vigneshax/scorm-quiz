@@ -1,6 +1,5 @@
-// src/KbcQuiz.tsx
 import { useState, useEffect } from "react";
-import { HelpCircle, CheckCircle, XCircle } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 import {
   Button,
   Card,
@@ -10,122 +9,155 @@ import {
   Typography,
   Grid,
   Box,
+  CircularProgress,
+  Alert,
+  LinearProgress,
 } from "@mui/material";
+import questionsCsv from "./questions.csv";
+import Papa from "papaparse";
+
 import {
   initSCORM,
   terminateSCORM,
   setSCORMValue,
   getSCORMValue,
   commitSCORM,
+  recordInteraction,
 } from "./scormUtils";
+import { correctComments, incorrectComments, moneyLadder, themeColors } from "./Constants";
 
-const questions = [
-  {
-    question: "Which planet is known as the Red Planet?",
-    options: ["Venus", "Mars", "Jupiter", "Saturn"],
-    correctAnswer: "Mars",
-  },
-  {
-    question: "Who wrote 'To Kill a Mockingbird'?",
-    options: ["Charles Dickens", "Jane Austen", "Harper Lee", "Mark Twain"],
-    correctAnswer: "Harper Lee",
-  },
-  {
-    question: "What is the capital of Japan?",
-    options: ["Beijing", "Seoul", "Tokyo", "Bangkok"],
-    correctAnswer: "Tokyo",
-  },
-  {
-    question: "Which element has the chemical symbol 'O'?",
-    options: ["Gold", "Silver", "Oxygen", "Iron"],
-    correctAnswer: "Oxygen",
-  },
-  {
-    question: "Who painted the Mona Lisa?",
-    options: [
-      "Vincent van Gogh",
-      "Leonardo da Vinci",
-      "Pablo Picasso",
-      "Claude Monet",
-    ],
-    correctAnswer: "Leonardo da Vinci",
-  },
-];
-
-const moneyLadder = [
-  "₹1,000",
-  "₹2,000",
-  "₹3,000",
-  "₹5,000",
-  "₹10,000",
-  "₹20,000",
-  "₹40,000",
-  "₹80,000",
-  "₹1,60,000",
-  "₹3,20,000",
-  "₹6,40,000",
-  "₹12,50,000",
-  "₹25,00,000",
-  "₹50,00,000",
-  "₹1,00,00,000",
-  "₹7,00,00,000",
-];
+export interface Question {
+  question: string;
+  options: string[];
+  correctAnswer: string;
+}
 
 export function KbcQuiz() {
+  const [comment, setComment] = useState<string | null>("Welcome to the KBC Game!");
+  const [alertSeverity, setAlertSeverity] = useState<"success" | "error" | "info" | "warning">("info");
+
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [lifeline5050, setLifeline5050] = useState(true);
   const [disabledOptions, setDisabledOptions] = useState<number[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true); // Loading state
+
+  const fetchQuestions = async () => {
+    setLoading(true); // Set loading to true
+    const response = await fetch(questionsCsv);
+    const text = await response.text();
+
+    Papa.parse(text, {
+      header: true,
+      complete: (results: any) => {
+        // Filter out empty rows
+        const validRows = results.data.filter((item: any) => item.question && item.options && item.correctAnswer);
+
+        const parsedQuestions = validRows.map((item: any) => {
+          // Check if the options exist and is a string before splitting
+          const options = typeof item.options === 'string' ? item.options.split("|") : [];
+
+          return {
+            question: item.question || "No question provided", // Fallback for undefined question
+            options: options.length > 0 ? options : ["No options available"], // Fallback for options
+            correctAnswer: item.correctAnswer || "No answer provided", // Fallback for undefined answer
+          };
+        });
+
+        setQuestions(parsedQuestions);
+        setLoading(false); // Set loading to false once questions are loaded
+      },
+    });
+  };
+
 
   useEffect(() => {
+    fetchQuestions();
     const initialized = initSCORM();
     if (initialized) {
       const studentName = getSCORMValue("cmi.core.student_name");
       console.log("Welcome,", studentName);
+      setSCORMValue("cmi.score.max", "100");
+      setSCORMValue("cmi.score.min", "0");
+      setSCORMValue("cmi.score.raw", "0");
+      setSCORMValue("cmi.completion_status", "incomplete");
     }
-
-    return () => {
-      terminateSCORM();
-    };
   }, []);
-
-  useEffect(() => {
-    if (isAnswerCorrect !== null) {
-      const timer = setTimeout(() => {
-        if (isAnswerCorrect) {
-          if (currentQuestion + 1 < questions.length) {
-            setCurrentQuestion(currentQuestion + 1);
-            setScore(score + 1);
-          } else {
-            setShowResult(true);
-            const scorePercentage = ((score + 1) / questions.length) * 100;
-            setSCORMValue("cmi.core.score.raw", scorePercentage.toString());
-            setSCORMValue(
-              "cmi.core.lesson_status",
-              scorePercentage >= 70 ? "passed" : "failed"
-            );
-            setSCORMValue("cmi.core.exit", "suspend");
-            commitSCORM();
-          }
-        } else {
-          setShowResult(true);
-        }
-        setSelectedAnswer(null);
-        setIsAnswerCorrect(null);
-        setDisabledOptions([]);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isAnswerCorrect, currentQuestion, score]);
 
   const handleAnswer = (selected: string) => {
     setSelectedAnswer(selected);
-    const correct = selected === questions[currentQuestion].correctAnswer;
-    setIsAnswerCorrect(correct);
+    const currentQ = questions[currentQuestion];
+    const correct = selected === currentQ.correctAnswer;
+
+
+    const randomComment = correct
+      ? correctComments[Math.floor(Math.random() * correctComments.length)]
+      : incorrectComments[Math.floor(Math.random() * incorrectComments.length)];
+    setComment(randomComment);
+    setAlertSeverity(correct ? "success" : "error");
+
+    recordInteraction({
+      id: `Q${currentQuestion + 1}`,
+      type: "choice",
+      learnerResponse: selected,
+      correctResponse: currentQ.correctAnswer,
+      result: correct ? "correct" : "incorrect",
+      question: questions[currentQuestion].question
+    });
+
+
+    if (correct) setScore((prevScore) => prevScore + 1);
+
+    setTimeout(() => {
+      if (currentQuestion + 1 < questions.length) {
+        setCurrentQuestion(currentQuestion + 1);
+      } else {
+        setShowResult(true);
+        setCurrentQuestion(currentQuestion + 1);
+
+        const scorePercentage = ((score + (correct ? 1 : 0)) / questions.length) * 100;
+        console.log(score, questions.length, scorePercentage)
+        const { resultMessage, severity } = (() => {
+          if ((score + (correct ? 1 : 0)) === questions.length) {
+            return { resultMessage: "Outstanding Performance! You're a quiz master! 🏆", severity: "success" as const };
+          } else if (score > questions.length / 2) {
+            return { resultMessage: "Great effort! You did really well. 🌟", severity: "info" as const };
+          } else {
+            return { resultMessage: "Good try! Keep practicing to improve! 👍", severity: "error" as const };
+          }
+        })();
+
+        setComment(resultMessage);
+        setAlertSeverity(severity);
+
+
+        // Update the objective when quiz ends
+        setSCORMValue("cmi.objectives.0.id", "quiz_1"); // Use a unique objective ID
+        setSCORMValue("cmi.objectives.0.score.raw", (score + (correct ? 1 : 0)).toString());
+        setSCORMValue("cmi.objectives.0.score.max", questions.length.toString());
+        setSCORMValue("cmi.objectives.0.score.min", "0");
+        setSCORMValue("cmi.objectives.0.success_status", scorePercentage >= 70 ? "passed" : "failed");
+        setSCORMValue("cmi.objectives.0.completion_status", "completed");
+        setSCORMValue("cmi.objectives.0.progress_measure", (scorePercentage / 100).toString());
+
+        setSCORMValue("cmi.score.raw", scorePercentage.toString());
+        setSCORMValue("cmi.score.scaled", (scorePercentage / 100).toString());
+        setSCORMValue("cmi.success_status", scorePercentage >= 70 ? "passed" : "failed");
+        setSCORMValue("cmi.completion_status", "completed");
+        setSCORMValue("cmi.exit", "suspend");
+        commitSCORM();
+        terminateSCORM();
+      }
+      setSelectedAnswer(null);
+      setDisabledOptions([]);
+    }, 1000);
   };
+
+
+
 
   const use5050Lifeline = () => {
     if (lifeline5050) {
@@ -145,131 +177,163 @@ export function KbcQuiz() {
     }
   };
 
-  const restartQuiz = () => {
-    setCurrentQuestion(0);
-    setScore(0);
-    setShowResult(false);
-    setLifeline5050(true);
-    setDisabledOptions([]);
-    setSelectedAnswer(null);
-    setIsAnswerCorrect(null);
-  };
-
   return (
     <Box
       minHeight="100vh"
       display="flex"
       alignItems="center"
       justifyContent="center"
-      padding={4}
-      bgcolor="linear-gradient(to bottom, #6a1b9a, #1976d2)"
+      bgcolor={themeColors.background}
     >
-      <Card sx={{ width: "100%", maxWidth: 600 }}>
+      <Card sx={{ width: "100%", p: 4, maxWidth: 600, bgcolor: 'white' }}>
         <CardHeader
           title={
-            <Typography variant="h5" align="center">
+            <Typography variant="h5" align="center" color={themeColors.primary}>
               Kaun Banega Crorepati
             </Typography>
           }
         />
+
         <CardContent>
-          {!showResult ? (
-            <>
-              <Typography variant="h6" gutterBottom>
-                Question {currentQuestion + 1}
-              </Typography>
-              <Typography variant="body1" paragraph>
-                {questions[currentQuestion].question}
-              </Typography>
-              <Grid container spacing={2}>
-                {questions[currentQuestion].options.map((option, index) => (
-                  <Grid item xs={6} key={index}>
-                    <Button
-                      fullWidth
-                      variant={
-                        selectedAnswer === option
-                          ? option === questions[currentQuestion].correctAnswer
-                            ? "contained"
-                            : "outlined"
-                          : "text"
-                      }
-                      color={
-                        option === questions[currentQuestion].correctAnswer
-                          ? "success"
-                          : selectedAnswer === option
-                          ? "error"
-                          : "primary"
-                      }
-                      onClick={() => handleAnswer(option)}
-                      disabled={
-                        disabledOptions.includes(index) ||
-                        selectedAnswer !== null
-                      }
-                    >
-                      {String.fromCharCode(65 + index)}. {option}
-                    </Button>
-                  </Grid>
-                ))}
-              </Grid>
-              <CardActions sx={{ justifyContent: "space-between", mt: 2 }}>
-                <Button
-                  variant="outlined"
-                  onClick={use5050Lifeline}
-                  disabled={!lifeline5050 || selectedAnswer !== null}
-                  startIcon={<HelpCircle size={20} />}
-                >
-                  50:50 Lifeline
-                </Button>
-                <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-                  Current Prize: {moneyLadder[score]}
-                </Typography>
-              </CardActions>
-              {isAnswerCorrect !== null && (
-                <Box
-                  mt={2}
-                  p={1}
-                  borderRadius={1}
-                  bgcolor={isAnswerCorrect ? "success.light" : "error.light"}
-                  color={isAnswerCorrect ? "success.dark" : "error.dark"}
-                >
-                  {isAnswerCorrect ? (
-                    <Typography variant="body1">
-                      <CheckCircle style={{ verticalAlign: "middle" }} /> Correct! Moving to the next question...
-                    </Typography>
-                  ) : (
-                    <Typography variant="body1">
-                      <XCircle style={{ verticalAlign: "middle" }} /> Incorrect. The correct answer was{" "}
-                      {questions[currentQuestion].correctAnswer}.
-                    </Typography>
-                  )}
-                </Box>
-              )}
-            </>
-          ) : (
-            <Box textAlign="center">
-              <Typography variant="h5" gutterBottom>
-                Quiz Completed!
-              </Typography>
-              <Typography variant="h6">
-                Your Score: {score} out of {questions.length}
-              </Typography>
-              <Typography
-                variant="h5"
-                color="success"
-                gutterBottom
-                sx={{ fontWeight: "bold" }}
-              >
-                You Won: {moneyLadder[score]}
-              </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={restartQuiz}
-                fullWidth
-              >
-                Play Again
-              </Button>
+          <Box mt={2} mb={2}>
+            <LinearProgress
+              // color={themeColors.primary}
+              variant="determinate"
+              value={(currentQuestion / questions.length) * 100}
+              sx={{
+                height: 10, borderRadius: 5, backgroundColor: themeColors.background, // Custom background color
+                "& .MuiLinearProgress-bar": {
+                  backgroundColor: themeColors.warning, // Custom progress color
+                },
+              }}
+            />
+          </Box>
+
+          {loading ? ( // Show loader while loading
+            <Box display="flex" justifyContent="center" alignItems="center" height={200}>
+              <CircularProgress />
             </Box>
+          ) : (
+            !showResult ? (
+              <>
+                <Typography variant="h6" gutterBottom color={themeColors.primary}>
+                  Question {currentQuestion + 1}
+                </Typography>
+                <Typography variant="body1" paragraph>
+                  {questions[currentQuestion].question}
+                </Typography>
+                <Grid container spacing={2}>
+                  {questions[currentQuestion].options.map((option, index) => (
+                    <Grid item xs={6} key={index}>
+                      <Button
+                        fullWidth
+                        variant={
+                          selectedAnswer === option
+                            ? option === questions[currentQuestion].correctAnswer
+                              ? "contained"
+                              : "outlined"
+                            : "text"
+                        }
+                        style={{
+                          backgroundColor:
+                            disabledOptions.includes(index)
+                              ? themeColors.background // Use a distinct color for disabled options
+                              : selectedAnswer === option
+                                ? themeColors.primary
+                                : themeColors.secondary,
+                          color: "#ffffff",
+                        }}
+                        onClick={() => handleAnswer(option)}
+                        disabled={disabledOptions.includes(index) || selectedAnswer !== null}
+                      >
+                        {String.fromCharCode(65 + index)}. {option}
+                      </Button>
+                    </Grid>
+                  ))}
+                </Grid>
+                <CardActions sx={{ justifyContent: "space-between", flexDirection: 'column', mt: 2 }}>
+                  <Button
+                    variant="contained"
+                    onClick={use5050Lifeline}
+                    disabled={!lifeline5050 || selectedAnswer !== null}
+                    startIcon={<HelpCircle size={20} />}
+                    sx={{
+                      backgroundColor: themeColors.primary,
+                    }}
+                  >
+                    50:50 Lifeline
+                  </Button>
+                  <Box mt={2} width="100%">
+                    <Alert
+                      severity={alertSeverity}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        textAlign: "center", // Ensure the text is centered
+                      }}
+                    >
+                      {comment}
+                    </Alert>
+
+                  </Box>
+
+                </CardActions>
+              </>
+            ) : (
+              <Box textAlign="center" sx={{ p: 4, bgcolor: themeColors.warning, borderRadius: 2, boxShadow: 2 }}>
+                <Box display="flex" justifyContent="center" alignItems="center" mb={2}>
+                  {/* Emoji on the left */}
+                  <Typography variant="h4" sx={{ mr: 2 }}>
+                    🎉
+                  </Typography>
+
+                  {/* Main text */}
+                  <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: themeColors.primary }}>
+                    Quiz Completed!
+                  </Typography>
+
+                  {/* Emoji on the right */}
+                  <Typography variant="h4" sx={{ ml: 2 }}>
+                    🎉
+                  </Typography>
+                </Box>
+                <Typography variant="h6" sx={{ mb: 2, color: themeColors.success }}>
+                  Your Score: <strong>{score}</strong> out of <strong>{questions.length}</strong>
+                </Typography>
+
+                <Box mt={2} mb={2} width="100%">
+                  <Alert
+                    severity={alertSeverity}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center", // Ensure the text is centered
+                    }}
+                  >
+                    {comment}
+                  </Alert>
+
+                </Box>
+
+
+                <Button
+                  variant="contained"
+                  style={{
+                    backgroundColor: themeColors.primary,
+                    color: "#ffffff",
+                    padding: '12px 20px',
+                    transition: 'background-color 0.3s ease',
+                  }}
+                  fullWidth
+                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = themeColors.success)} // Change color on hover
+                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = themeColors.primary)} // Revert color
+                >
+                  Please close the session using X icon above..
+                </Button>
+              </Box>
+            )
           )}
         </CardContent>
       </Card>
