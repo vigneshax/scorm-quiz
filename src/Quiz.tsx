@@ -23,7 +23,7 @@ import {
   getSCORMValue,
   commitSCORM,
   recordInteraction,
-} from "./scormUtils";
+} from "./ScormMock";
 import { correctComments, incorrectComments, moneyLadder, themeColors } from "./Constants";
 
 export interface Question {
@@ -179,13 +179,21 @@ export function KbcQuiz() {
 
   return (
     <Box
-      minHeight="100vh"
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      bgcolor={themeColors.background}
-    >
-      <Card sx={{ width: "100%", p: 4, maxWidth: 600, bgcolor: 'white' }}>
+  minHeight="100vh"
+  display="flex"
+  alignItems="center"
+  justifyContent="center"
+  sx={{
+    backgroundImage: "url('/questions background_v2.jpg')",
+    backgroundSize: "cover", // Ensures the image covers the entire box
+    backgroundRepeat: "no-repeat", // Prevents the image from repeating
+    backgroundPosition: "center", // Centers the image
+  }}
+  bgcolor={themeColors.background}
+>
+  {/* Add your content here */}
+
+      <Card sx={{ width: "100%", p: 4, maxWidth: 600, bgcolor:"transparent" }}>
         <CardHeader
           title={
             <Typography variant="h5" align="center" color={themeColors.primary}>
