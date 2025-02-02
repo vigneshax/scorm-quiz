@@ -1,20 +1,18 @@
 import { useState, useEffect } from "react";
-import { HelpCircle } from "lucide-react";
 import {
   Button,
   Card,
   CardContent,
-  CardHeader,
   CardActions,
   Typography,
   Grid,
   Box,
   CircularProgress,
-  Alert,
-  LinearProgress,
 } from "@mui/material";
 import questionsCsv from "./questions.csv";
 import Papa from "papaparse";
+import { Howl } from 'howler';
+import Confetti from "react-confetti";
 
 import {
   initSCORM,
@@ -23,8 +21,11 @@ import {
   getSCORMValue,
   commitSCORM,
   recordInteraction,
-} from "./ScormMock";
-import { correctComments, incorrectComments, moneyLadder, themeColors } from "./Constants";
+} from "./scormUtils";
+
+import { basePath, correctComments, incorrectComments, LinearProgressWithLabel, themeColors } from "./Constants";
+import LifelineButton from "./components/lifelineButton";
+import OptionButton from "./components/optionButton";
 
 export interface Question {
   question: string;
@@ -32,18 +33,32 @@ export interface Question {
   correctAnswer: string;
 }
 
-export function KbcQuiz() {
+interface KbcQuizProps {
+  quiz_options: {
+    total_questions: number;
+    passing_score: number;
+    "5050_lifeline": boolean;
+    swap_question: boolean;
+  };
+}
+
+export function KbcQuiz({ quiz_options }: KbcQuizProps) {
   const [comment, setComment] = useState<string | null>("Welcome to the KBC Game!");
   const [alertSeverity, setAlertSeverity] = useState<"success" | "error" | "info" | "warning">("info");
-
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
+  const totalQuestions = quiz_options.total_questions;
   const [showResult, setShowResult] = useState(false);
   const [lifeline5050, setLifeline5050] = useState(true);
+  const [swapQuestion, setSwapQuestion] = useState(true);
+  const [passed, setPassed] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const [disabledOptions, setDisabledOptions] = useState<number[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true); // Loading state
+  const [progress, setProgress] = useState(0);
+
 
   const fetchQuestions = async () => {
     setLoading(true); // Set loading to true
@@ -73,6 +88,10 @@ export function KbcQuiz() {
     });
   };
 
+
+  const applauseSound = new Howl({ src: [`${basePath}/sounds/Applause.mp3`] });
+  const sadSound = new Howl({ src: [`${basePath}/sounds/SadViolin.mp3`] });
+  const clickSound = new Howl({ src: [`${basePath}/sounds/Click.mp3`], preload: true });
 
   useEffect(() => {
     fetchQuestions();
@@ -112,32 +131,48 @@ export function KbcQuiz() {
     if (correct) setScore((prevScore) => prevScore + 1);
 
     setTimeout(() => {
-      if (currentQuestion + 1 < questions.length) {
+
+      if (progress + 1 < totalQuestions) {
         setCurrentQuestion(currentQuestion + 1);
+        setProgress(progress + 1);
+
       } else {
         setShowResult(true);
         setCurrentQuestion(currentQuestion + 1);
+        setProgress(progress + 1);
 
-        const scorePercentage = ((score + (correct ? 1 : 0)) / questions.length) * 100;
-        console.log(score, questions.length, scorePercentage)
+        const scorePercentage = ((score + (correct ? 1 : 0)) / totalQuestions) * 100;
+        console.log(scorePercentage)
+        setPassed(scorePercentage >= quiz_options.passing_score);
+        console.log(score, totalQuestions, scorePercentage)
+        if (scorePercentage >= quiz_options.passing_score) {
+          console.log("applauseSound")
+          applauseSound.play();
+        } else {
+          console.log("sadSound")
+          sadSound.play();
+        }
         const { resultMessage, severity } = (() => {
-          if ((score + (correct ? 1 : 0)) === questions.length) {
+          if ((score + (correct ? 1 : 0)) === totalQuestions) {
             return { resultMessage: "Outstanding Performance! You're a quiz master! 🏆", severity: "success" as const };
-          } else if (score > questions.length / 2) {
+          } else if (score > totalQuestions / 2) {
             return { resultMessage: "Great effort! You did really well. 🌟", severity: "info" as const };
           } else {
             return { resultMessage: "Good try! Keep practicing to improve! 👍", severity: "error" as const };
           }
+
+
         })();
 
         setComment(resultMessage);
         setAlertSeverity(severity);
+        console.log(passed, "Passed")
 
 
         // Update the objective when quiz ends
         setSCORMValue("cmi.objectives.0.id", "quiz_1"); // Use a unique objective ID
         setSCORMValue("cmi.objectives.0.score.raw", (score + (correct ? 1 : 0)).toString());
-        setSCORMValue("cmi.objectives.0.score.max", questions.length.toString());
+        setSCORMValue("cmi.objectives.0.score.max", totalQuestions.toString());
         setSCORMValue("cmi.objectives.0.score.min", "0");
         setSCORMValue("cmi.objectives.0.success_status", scorePercentage >= 70 ? "passed" : "failed");
         setSCORMValue("cmi.objectives.0.completion_status", "completed");
@@ -151,6 +186,10 @@ export function KbcQuiz() {
         commitSCORM();
         terminateSCORM();
       }
+
+
+      console.log(progress)
+      console.log("progress")
       setSelectedAnswer(null);
       setDisabledOptions([]);
     }, 1000);
@@ -177,45 +216,43 @@ export function KbcQuiz() {
     }
   };
 
+  const useSwapQuestion = () => {
+    if (swapQuestion) {
+      setCurrentQuestion(currentQuestion + 1);
+      setSwapQuestion(false);
+    }
+  };
   return (
     <Box
-  minHeight="100vh"
-  display="flex"
-  alignItems="center"
-  justifyContent="center"
-  sx={{
-    backgroundImage: "url('/questions background_v2.jpg')",
-    backgroundSize: "cover", // Ensures the image covers the entire box
-    backgroundRepeat: "no-repeat", // Prevents the image from repeating
-    backgroundPosition: "center", // Centers the image
-  }}
-  bgcolor={themeColors.background}
->
-  {/* Add your content here */}
+      minHeight="100vh"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      sx={{
+        backgroundImage: "url('images/questions_background_v2.jpg')",
+        backgroundSize: "cover",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+      }}
+      bgcolor={themeColors.background}
+    >
 
-      <Card sx={{ width: "100%", p: 4, maxWidth: 600, bgcolor:"transparent" }}>
-        <CardHeader
-          title={
-            <Typography variant="h5" align="center" color={themeColors.primary}>
-              Kaun Banega Crorepati
-            </Typography>
-          }
-        />
-
+      <Card sx={{ width: "100%", p: 4, maxWidth: 500, bgcolor: "transparent" }}>
         <CardContent>
           <Box mt={2} mb={2}>
-            <LinearProgress
-              // color={themeColors.primary}
+            <LinearProgressWithLabel
               variant="determinate"
-              value={(currentQuestion / questions.length) * 100}
+              value={(progress / totalQuestions) * 100}
               sx={{
-                height: 10, borderRadius: 5, backgroundColor: themeColors.background, // Custom background color
+                height: 10, borderRadius: 5, backgroundColor: themeColors.background,
                 "& .MuiLinearProgress-bar": {
-                  backgroundColor: themeColors.warning, // Custom progress color
+                  backgroundColor: themeColors.secondary,
                 },
               }}
             />
           </Box>
+
+
 
           {loading ? ( // Show loader while loading
             <Box display="flex" justifyContent="center" alignItems="center" height={200}>
@@ -224,54 +261,56 @@ export function KbcQuiz() {
           ) : (
             !showResult ? (
               <>
-                <Typography variant="h6" gutterBottom color={themeColors.primary}>
-                  Question {currentQuestion + 1}
-                </Typography>
-                <Typography variant="body1" paragraph>
+
+                <Typography color={themeColors.warning} textAlign={"center"} fontWeight={"bold"} variant="body1" paragraph>
                   {questions[currentQuestion].question}
                 </Typography>
-                <Grid container spacing={2}>
+
+                <Grid
+                  container
+                  spacing={2}
+                  justifyContent="center"
+                  alignItems="center"
+                >
                   {questions[currentQuestion].options.map((option, index) => (
-                    <Grid item xs={6} key={index}>
-                      <Button
-                        fullWidth
-                        variant={
-                          selectedAnswer === option
-                            ? option === questions[currentQuestion].correctAnswer
-                              ? "contained"
-                              : "outlined"
-                            : "text"
-                        }
-                        style={{
-                          backgroundColor:
-                            disabledOptions.includes(index)
-                              ? themeColors.background // Use a distinct color for disabled options
-                              : selectedAnswer === option
-                                ? themeColors.primary
-                                : themeColors.secondary,
-                          color: "#ffffff",
-                        }}
-                        onClick={() => handleAnswer(option)}
-                        disabled={disabledOptions.includes(index) || selectedAnswer !== null}
-                      >
-                        {String.fromCharCode(65 + index)}. {option}
-                      </Button>
+                    <Grid
+                      item
+                      xs={6}
+                      key={index}
+                      display="flex"
+                      justifyContent="center"
+                      alignItems="center"
+                    >
+                      <OptionButton
+                        key={index}
+                        option={option}
+                        index={index}
+                        handleAnswer={handleAnswer}
+                        disabledOptions={disabledOptions}
+                        selectedAnswer={selectedAnswer}
+                      />
                     </Grid>
                   ))}
                 </Grid>
-                <CardActions sx={{ justifyContent: "space-between", flexDirection: 'column', mt: 2 }}>
-                  <Button
-                    variant="contained"
-                    onClick={use5050Lifeline}
-                    disabled={!lifeline5050 || selectedAnswer !== null}
-                    startIcon={<HelpCircle size={20} />}
-                    sx={{
-                      backgroundColor: themeColors.primary,
-                    }}
-                  >
-                    50:50 Lifeline
-                  </Button>
-                  <Box mt={2} width="100%">
+
+                <CardActions sx={{ justifyContent: "space-between", flexDirection: 'column', mt: 3 }}>
+
+                  <Box display="flex" justifyContent="space-evenly" alignItems="center" width="100%">
+                    {quiz_options["5050_lifeline"] && <LifelineButton
+                      onClick={use5050Lifeline}
+                      isDisabled={!lifeline5050 || selectedAnswer !== null}
+                      imageSrc="images/50_50_lifeline_button.png"
+                      label="50:50 Lifeline"
+                    />}
+                    {quiz_options.swap_question && <LifelineButton
+                      onClick={useSwapQuestion}
+                      isDisabled={!swapQuestion || selectedAnswer !== null}
+                      imageSrc="images/50_50_lifeline_button.png"
+                      label="Swap Question"
+                    />}
+                  </Box>
+
+                  {/* <Box mt={2} width="100%">
                     <Alert
                       severity={alertSeverity}
                       sx={{
@@ -284,34 +323,52 @@ export function KbcQuiz() {
                       {comment}
                     </Alert>
 
-                  </Box>
+                  </Box>  */}
+
+
 
                 </CardActions>
               </>
             ) : (
-              <Box textAlign="center" sx={{ p: 4, bgcolor: themeColors.warning, borderRadius: 2, boxShadow: 2 }}>
-                <Box display="flex" justifyContent="center" alignItems="center" mb={2}>
-                  {/* Emoji on the left */}
-                  <Typography variant="h4" sx={{ mr: 2 }}>
-                    🎉
-                  </Typography>
+              <Box textAlign="center" sx={{ p: 4 }}>
 
-                  {/* Main text */}
-                  <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: themeColors.primary }}>
+
+
+
+                <Box display="flex" justifyContent="center" alignItems="center" mb={2}>
+
+
+                  <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: "white" }}>
                     Quiz Completed!
                   </Typography>
 
-                  {/* Emoji on the right */}
-                  <Typography variant="h4" sx={{ ml: 2 }}>
-                    🎉
-                  </Typography>
+
                 </Box>
+                {passed ? (
+                  <>
+
+                    <Confetti
+                      width={window.innerWidth}
+                      height={window.innerHeight}
+                      recycle={true}
+                    />
+                    <Typography variant="h1" gutterBottom sx={{ color: "green", fontSize: "2rem", fontWeight: 'bold' }}>
+                      Congratulations!
+                    </Typography>
+                  </>
+                ) : (
+                  <>
+                    <Typography variant="h1" gutterBottom sx={{ color: "red", fontSize: "2rem", fontWeight: 'bold' }}>
+                      Better Luck Next Time 😢
+                    </Typography>
+                  </>
+                )}
                 <Typography variant="h6" sx={{ mb: 2, color: themeColors.success }}>
-                  Your Score: <strong>{score}</strong> out of <strong>{questions.length}</strong>
+                  Your Score: <strong>{score}</strong> out of <strong>{totalQuestions}</strong>
                 </Typography>
 
-                <Box mt={2} mb={2} width="100%">
-                  <Alert
+                {/* <Box mt={2} mb={2} width="100%">
+                  {/* <Alert
                     severity={alertSeverity}
                     sx={{
                       display: "flex",
@@ -321,9 +378,10 @@ export function KbcQuiz() {
                     }}
                   >
                     {comment}
-                  </Alert>
+                  </Alert> */}
 
-                </Box>
+                {/* </Box>  */}
+
 
 
                 <Button
@@ -331,20 +389,24 @@ export function KbcQuiz() {
                   style={{
                     backgroundColor: themeColors.primary,
                     color: "#ffffff",
-                    padding: '12px 20px',
-                    transition: 'background-color 0.3s ease',
+                    border: "2px solid white",
+                    borderRadius: '10px'
+                    // padding: '12px 20px',
+                    // transition: 'background-color 0.3s ease',
                   }}
-                  fullWidth
-                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = themeColors.success)} // Change color on hover
-                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = themeColors.primary)} // Revert color
+                // fullWidth
+
+
                 >
-                  Please close the session using X icon above..
+                  Please close the session...
                 </Button>
               </Box>
             )
           )}
         </CardContent>
       </Card>
+
+
     </Box>
   );
 }

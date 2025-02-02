@@ -1,0 +1,25 @@
+quiz_name: "AFX PIP Quiz"
+quiz_date: "2025-02-02"
+app_name: "AFX PIP Scorm Application"
+version: "1.0"
+
+quiz_type:
+  # select any one of the following
+  kbc_quiz: false
+  timer_quiz: true
+  
+
+kbc_quiz_options:
+  # options for the kbc_quiz
+  total_questions: 5
+  passing_score: 70
+  5050_lifeline: true
+  swap_question: true
+
+timer_quiz_options:
+  # options for the timer_quiz
+  total_questions: 5
+  passing_score: 70
+  total_time: 600
+  5050_lifeline: true
+  swap_question: true
