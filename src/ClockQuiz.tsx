@@ -43,7 +43,7 @@ export interface Question {
 interface TimerQuizProps {
   quiz_options: {
     total_questions: number;
-    passing_score: number;
+    passing_percentage: number;
     total_time: number;
     "5050_lifeline": boolean;
     swap_question: boolean;
@@ -246,9 +246,9 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
 
         const scorePercentage = ((score + (correct ? 1 : 0)) / totalQuestions) * 100;
         console.log(scorePercentage)
-        setPassed(scorePercentage >= quiz_options.passing_score);
+        setPassed(scorePercentage >= quiz_options.passing_percentage);
         console.log(score, totalQuestions, scorePercentage)
-        if (scorePercentage >= quiz_options.passing_score) {
+        if (scorePercentage >= quiz_options.passing_percentage) {
           console.log("applauseSound")
           applauseSound.play();
         } else {
