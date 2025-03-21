@@ -39,6 +39,7 @@ interface KbcQuizProps {
     passing_percentage: number;
     "5050_lifeline": boolean;
     swap_question: boolean;
+    background: string;
   };
 }
 
@@ -229,7 +230,7 @@ export function KbcQuiz({ quiz_options }: KbcQuizProps) {
       alignItems="center"
       justifyContent="center"
       sx={{
-        backgroundImage: "url('images/questions_background_v2.jpg')",
+        backgroundImage: `url(${quiz_options.background})`,
         backgroundSize: "cover",
         backgroundRepeat: "no-repeat",
         backgroundPosition: "center",

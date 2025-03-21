@@ -3,23 +3,12 @@ quiz_date: "2025-02-02"
 app_name: "AFX PIP Scorm Application"
 version: "1.0"
 
-quiz_type:
-  # select any one of the following
-  kbc_quiz: true
-  timer_quiz: false
-  
-
-kbc_quiz_options:
-  # options for the kbc_quiz
-  total_questions: 15
-  passing_percentage: 80 # passing percentage 
-  5050_lifeline: true
-  swap_question: true
-
-timer_quiz_options:
+quiz_options:
   # options for the timer_quiz
-  total_questions: 5
+  total_questions: 10
   passing_percentage: 70
   total_time: 600
   5050_lifeline: true
   swap_question: true
+  background: "images/result_background_v4.jpg"
+  rules: [ "You have 10 minutes to answer 10 questions. So, use your time wisely!", "Once the timer hits zero, the game is over! No second chances.", "Think carefully and answer all the questions before time runs out.", "Use the arrow keys → ← to move between questions.", "Need some help? You have a 50-50 lifeline to remove two wrong answers!", "Stuck on a tough question? Use your Swap Question lifeline to replace it with a new one!", "Once you start, there's no stopping the clock! Stay focused and give it your best shot." ]
