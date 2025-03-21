@@ -63,11 +63,9 @@ const LifelineButton: React.FC<LifelineButtonProps> = ({
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          fontSize: "14px",
-          color: "#ffffff",
+          color: "#000000",
           fontWeight: "medium",
           width: "100%",
-          textShadow: "0px 2px 4px rgba(0, 0, 0, 0.6)",
         }}
       >
         {label}

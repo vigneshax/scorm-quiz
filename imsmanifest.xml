@@ -47,6 +47,11 @@ Provided by Rustici Software - www.scorm.com.
       <file href="images/option_button.png" />
       <file href="images/50_50_lifeline_button.png" />
       <file href="images/questions_background_v2.png" />
+      <file href="config.yaml" />
+      <file href="images/options_button_resized_large.png" />
+      <file href="images/results_background_preview_0228252.jpg" />
+      <file href="images/questions_background_v2.png" />
+      <file href="images/result_background_v4.jpg" />
     </resource>
   </resources>
 </manifest>

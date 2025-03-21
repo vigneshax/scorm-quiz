@@ -1,25 +1,18 @@
 import { useState, useEffect } from "react";
-import { HelpCircle, Timer } from "lucide-react";
 import {
   Button,
   Card,
   CardContent,
-  CardHeader,
   CardActions,
   Typography,
   Grid,
   Box,
-  CircularProgress,
-  Alert,
-  LinearProgress,
+  IconButton,
 } from "@mui/material";
 import questionsCsv from "./questions.csv";
 import Papa from "papaparse";
 import { Howl } from 'howler';
 import Confetti from "react-confetti";
-
-import yaml from "js-yaml";
-
 
 import {
   initSCORM,
@@ -29,15 +22,21 @@ import {
   commitSCORM,
   recordInteraction,
 } from "./scormUtils";
-import { basePath, boxButtonSX, ClockLinearProgressWithLabel, correctComments, incorrectComments, LinearProgressWithLabel, moneyLadder, themeColors } from "./Constants";
-import OptionButton from "./components/optionButton";
+import { basePath, themeColors } from "./Constants";
+import OptionButton from "./components/optionButtonLong";
 import LifelineButton from "./components/lifelineButton";
 import RulesDialog from "./components/rulesDialog";
+import { ArrowBack, ArrowForward } from "@mui/icons-material";
+import ConfirmationDialog from "./components/confirmDialog";
 
 export interface Question {
-  question: string;
-  options: string[];
-  correctAnswer: string;
+  question: string;        // The question text
+  options: string[];       // Answer choices
+  correctAnswer: string;   // The correct answer
+  // isAnswered?: boolean;    // Whether the question has been answered
+  // selectedAnswer?: string; // User's selected answer (if any)
+  // isSkipped?: boolean;     // If the question was skipped (or marked for review)
+  // index?: number;          // Question index in the list
 }
 
 interface TimerQuizProps {
@@ -47,27 +46,46 @@ interface TimerQuizProps {
     total_time: number;
     "5050_lifeline": boolean;
     swap_question: boolean;
+    background: string;
+    rules: string[];
   };
 }
 
 export function TimerQuiz({ quiz_options }: TimerQuizProps) {
 
-  const [config, setConfig] = useState<any>(null);
-  const [comment, setComment] = useState<string | null>("Welcome to the KBC Game!");
-  const [alertSeverity, setAlertSeverity] = useState<"success" | "error" | "info" | "warning">("info");
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [selectedAnswers, setSelectedAnswers] = useState<{ [key: number]: string | null }>({});
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const totalQuestions = quiz_options.total_questions;
   const [showResult, setShowResult] = useState(false);
   const [lifeline5050, setLifeline5050] = useState(true);
   const [swapQuestion, setSwapQuestion] = useState(true);
+
   const [passed, setPassed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [disabledOptions, setDisabledOptions] = useState<number[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+
   const totalTime = quiz_options.total_time;
+
+  const [student, setStudent] = useState<string | null>(null);
+
+
+  const [tempSelected, setTempSelected] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleOptionClick = (option: string) => {
+    setTempSelected(option);
+    setShowConfirm(true);
+  };
+
+
+  const cancelAnswer = () => {
+    setShowConfirm(false);
+    setTempSelected(null);
+  };
 
   const [timeLeft, setTimeLeft] = useState(totalTime);
   const [showRulesDialog, setShowRulesDialog] = useState(true);
@@ -79,7 +97,6 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
     return themeColors.secondary;
   };
 
-  const barColor = getColorBasedOnTime();
   const fetchQuestions = async () => {
     setLoading(true);
     const response = await fetch(questionsCsv);
@@ -109,9 +126,9 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
   };
 
 
-  const applauseSound = new Howl({ src: ['/sounds/Applause.mp3'] });
-  const sadSound = new Howl({ src: ['/sounds/SadViolin.mp3'] });
-  const clickSound = new Howl({ src: ['/sounds/Click.mp3'], preload: true });
+  const applauseSound = new Howl({ src: [`${basePath}/sounds/Applause.mp3`] });
+  const sadSound = new Howl({ src: [`${basePath}/sounds/SadViolin.mp3`] });
+  const clickSound = new Howl({ src: [`${basePath}/sounds/Click.mp3`], preload: true });
   const [isRunning, setIsRunning] = useState(false);
 
   const handleTimeOut = () => {
@@ -131,9 +148,18 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
     }, 1000);
   };
 
+  useEffect(() => {
+    setShowConfirm(false);
+  }, [currentQuestion]);
 
   useEffect(() => {
     if (!isRunning) return;
+
+    if (Object.keys(selectedAnswers).length === totalQuestions) {
+      console.log("All questions answered. Stopping timer.", Object.keys(selectedAnswers).length + 1);
+      setIsRunning(false);
+      return;
+    }
 
     if (timeLeft <= 0) {
       console.log("calling timeLeft = 0", isRunning);
@@ -186,21 +212,18 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
   useEffect(() => {
 
     fetchQuestions();
-    fetch("/config.yaml")
-      .then((response) => response.text())
-      .then((text) => {
-        const parsedData = yaml.load(text);
-        setConfig(parsedData);
-
-        console.log(parsedData);
-        console.log("Config loaded");
-        console.log(config);
-
-      })
     const initialized = initSCORM();
     if (initialized) {
-      const studentName = getSCORMValue("cmi.core.student_name");
+      const studentName = getSCORMValue("cmi.learner_name");
       console.log("Welcome,", studentName);
+      setStudent(studentName ? studentName : null);
+
+      const version = getSCORMValue("cmi._version");
+      console.log("SCORM Version:", version);
+
+      const status = getSCORMValue("cmi.completion_status");
+      console.log("Completion Status:", status);
+
       setSCORMValue("cmi.score.max", "100");
       setSCORMValue("cmi.score.min", "0");
       setSCORMValue("cmi.score.raw", "0");
@@ -209,74 +232,86 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
   }, []);
 
   const handleAnswer = (selected: string) => {
+    if (selectedAnswers[currentQuestion]) return; // Prevent re-selection
+
+    // Update selected answers with functional update to avoid stale state
+    setSelectedAnswers(prev => {
+      const updatedAnswers = { ...prev, [currentQuestion]: selected };
+
+      // Find unanswered questions based on the latest state
+      const unansweredIndexes = questions
+        .slice(0, totalQuestions)
+        .map((_, index) => index)
+        .filter(index => !(index in updatedAnswers)); // Unanswered questions
+
+      // console.log("Updated selectedAnswers:", updatedAnswers);
+      // console.log("Unanswered Questions:", unansweredIndexes);
+
+      // Handle progress and navigation
+      setProgress(prevProgress => {
+        const nextProgress = prevProgress + 1;
+
+        if (nextProgress < totalQuestions) {
+          console.log("Next sequential question", nextProgress, totalQuestions, selected);
+          setCurrentQuestion(currentQuestion + 1);
+        } else if (unansweredIndexes.length > 0) {
+          console.log("Jumping to first unanswered question:", unansweredIndexes[0]);
+          setCurrentQuestion(unansweredIndexes[0]); // Move to next unanswered question
+        } else {
+          console.log("All questions answered. Showing results.");
+          setShowResult(true);
+        }
+
+        return nextProgress;
+      });
+
+      return updatedAnswers;
+    });
+
     setSelectedAnswer(selected);
-    // setTime(timelimit);
-    const currentQ = questions[currentQuestion];
-    const correct = selected === currentQ.correctAnswer;
 
+    // Check correctness and update score
+    const correct = selected === questions[currentQuestion].correctAnswer;
+    if (correct) setScore(prevScore => prevScore + 1);
 
-    const randomComment = correct
-      ? correctComments[Math.floor(Math.random() * correctComments.length)]
-      : incorrectComments[Math.floor(Math.random() * incorrectComments.length)];
-    setComment(randomComment);
-    setAlertSeverity(correct ? "success" : "error");
-
+    // Record interaction
     recordInteraction({
       id: `Q${currentQuestion + 1}`,
       type: "choice",
       learnerResponse: selected,
-      correctResponse: currentQ.correctAnswer,
+      correctResponse: questions[currentQuestion].correctAnswer,
       result: correct ? "correct" : "incorrect",
       question: questions[currentQuestion].question
     });
 
 
-    if (correct) setScore((prevScore) => prevScore + 1);
 
-    setTimeout(() => {
 
-      if (progress + 1 < totalQuestions) {
-        setCurrentQuestion(currentQuestion + 1);
-        setProgress(progress + 1);
 
-      } else {
-        setShowResult(true);
-        setCurrentQuestion(currentQuestion + 1);
-        setProgress(progress + 1);
 
-        const scorePercentage = ((score + (correct ? 1 : 0)) / totalQuestions) * 100;
-        console.log(scorePercentage)
+    // Handle SCORM updates when quiz is completed
+    if (Object.keys(selectedAnswers).length + 1 == totalQuestions) {
+
+      console.log("Quiz completed. Calculating score...", progress, Object.keys(selectedAnswers).length, totalQuestions);
+      setTimeout(() => {
+        const finalScore = score + (correct ? 1 : 0);
+        const scorePercentage = (finalScore / totalQuestions) * 100;
+
+        console.log("Final Score:", finalScore, "Percentage:", scorePercentage);
+
         setPassed(scorePercentage >= quiz_options.passing_percentage);
-        console.log(score, totalQuestions, scorePercentage)
+
         if (scorePercentage >= quiz_options.passing_percentage) {
-          console.log("applauseSound")
+          console.log("Playing applause sound");
           applauseSound.play();
         } else {
-          console.log("sadSound")
+          console.log("Playing sad sound");
           sadSound.play();
         }
 
-        setTimeLeft(0);
-        const { resultMessage, severity } = (() => {
-          if ((score + (correct ? 1 : 0)) === totalQuestions) {
-            return { resultMessage: "Outstanding Performance! You're a quiz master! 🏆", severity: "success" as const };
-          } else if (score > totalQuestions / 2) {
-            return { resultMessage: "Great effort! You did really well. 🌟", severity: "info" as const };
-          } else {
-            return { resultMessage: "Good try! Keep practicing to improve! 👍", severity: "error" as const };
-          }
-
-
-        })();
-
-        setComment(resultMessage);
-        setAlertSeverity(severity);
-        console.log(passed, "Passed")
-
-
-        // Update the objective when quiz ends
-        setSCORMValue("cmi.objectives.0.id", "quiz_1"); // Use a unique objective ID
-        setSCORMValue("cmi.objectives.0.score.raw", (score + (correct ? 1 : 0)).toString());
+        // SCORM tracking updates
+        setSCORMValue("cmi.objectives.0.id", "quiz_1");
+        setSCORMValue("cmi.objectives.0.score.raw", finalScore.toString());
         setSCORMValue("cmi.objectives.0.score.max", totalQuestions.toString());
         setSCORMValue("cmi.objectives.0.score.min", "0");
         setSCORMValue("cmi.objectives.0.success_status", scorePercentage >= 70 ? "passed" : "failed");
@@ -290,15 +325,27 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
         setSCORMValue("cmi.exit", "suspend");
         commitSCORM();
         terminateSCORM();
-      }
+      }, 500);
+    }
 
-
-      console.log(progress)
-      console.log("progress")
-      setSelectedAnswer(null);
-      setDisabledOptions([]);
-    }, 1000);
+    // Reset UI selections
+    setSelectedAnswer(null);
+    setDisabledOptions([]);
   };
+
+  const confirmAnswer = () => {
+    console.log("ConfirmAnswer")
+    // setTimeout(() => {
+    if (tempSelected !== null) {
+      handleAnswer(tempSelected);
+      setShowConfirm(false);
+      setTempSelected(null);
+      //   }
+      // }, 1000);
+
+    };
+  }
+
 
   const use5050Lifeline = () => {
     if (lifeline5050) {
@@ -320,12 +367,31 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
 
   const useSwapQuestion = () => {
     if (swapQuestion) {
+      // Create a new question list excluding the current question
+      // const updatedQuestions = questions.filter((_, index) => index !== currentQuestion);
 
-      // setTime(timelimit);
-      setCurrentQuestion(currentQuestion + 1);
-      setSwapQuestion(false);
+
+      let updatedQuestions = questions.filter((_, index) => index !== currentQuestion);
+
+      // Insert the last question in place of the removed question
+      updatedQuestions = [
+        ...updatedQuestions.slice(0, currentQuestion),
+        questions[totalQuestions],
+        ...updatedQuestions.slice(currentQuestion)
+      ];
+
+      setQuestions(updatedQuestions); // Update the questions list
+      setSwapQuestion(false); // Reset swap state
+
+      // Move to the next question, ensuring we don't go out of bounds
+      if (currentQuestion >= updatedQuestions.length) {
+        setCurrentQuestion(updatedQuestions.length - 1);
+      } else {
+        setCurrentQuestion(currentQuestion);
+      }
     }
   };
+
 
   return (
 
@@ -336,40 +402,98 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
         alignItems="center"
         justifyContent="center"
         sx={{
-          backgroundImage: "url('images/questions_background_v2.jpg')",
+          backgroundImage: `url(${quiz_options.background})`,
           backgroundSize: "cover",
           backgroundRepeat: "no-repeat",
           backgroundPosition: "center",
         }}
         bgcolor={themeColors.background}
       >
-        <Card sx={{ width: "100%", p: 4, maxWidth: 500, bgcolor: "transparent", boxShadow: 0 }}>
-
-
+        <Card sx={{ width: "100%", p: 4, maxWidth: '60%', backgroundColor: `rgba(0, 0, 0, 1)`, boxShadow: 0 }}>
           <CardContent>
 
-            <Box mt={2} mb={2} display={isRunning ? "block" : "none"}>
+            {/* <Box m={2} display={isRunning ? "block" : "none"}>
               <ClockLinearProgressWithLabel
                 value={(timeLeft / totalTime) * 100}
                 barColor={barColor}
               />
-
-            </Box>
+            </Box> */}
 
             {showRulesDialog ? ( // Show loader while loading
-              <RulesDialog onClose={handleDialogClose} />
-
+              <RulesDialog open={showRulesDialog}  onClose={handleDialogClose} student={student} rules={quiz_options.rules} />
             ) : (
               !showResult ? (
                 <>
-                  <Typography color={themeColors.warning} textAlign={"center"} fontWeight={"bold"} variant="body1" paragraph>
-                    {questions[currentQuestion].question}
-                  </Typography>
+                  <Box  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        width: "100%",
+                        mb: 1,
+                      }}
+                    >
+                      <Typography
+                        color={themeColors.warning}
+                        textAlign="left"
+                        fontWeight="medium"
+                        variant="body1"
+                        sx={{ fontSize: "1.5rem", flex: 1 }} // Allows text to take available space
+                      >
+                        Question {currentQuestion + 1}
+                      </Typography>
+
+
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 3, // Increased spacing between arrows
+                          flexShrink: 0, // Prevents the icons from shrinking
+                        }}
+                      >
+                        <IconButton
+                          color="warning"
+                          onClick={() => setCurrentQuestion(currentQuestion - 1)}
+                          disabled={currentQuestion === 0} // Disable when on the first question
+                        >
+                          <ArrowBack sx={{ fontSize: "1.8rem" }} />
+                        </IconButton>
+
+                        <IconButton
+                          color="warning"
+                          onClick={() => {
+                            setCurrentQuestion(prev => prev + 1);
+                            setProgress(prev => prev + 1);
+                          }}
+                          disabled={currentQuestion === totalQuestions - 1} // Disable when on the last question
+                        >
+                          <ArrowForward sx={{ fontSize: "1.8rem" }} />
+                        </IconButton>
+                      </Box>
+
+
+                    </Box>
+
+                    <Typography
+                      color="#FFFFFF"
+                      textAlign="left"
+                      fontWeight="medium"
+                      variant="body1"
+                      paragraph
+                    >
+                      {questions[currentQuestion].question}
+                    </Typography>
+                  </Box>
+
                   <Grid
                     container
                     spacing={2}
                     justifyContent="center"
                     alignItems="center"
+                    sx={{ mt: 1 }}
                   >
                     {questions[currentQuestion].options.map((option, index) => (
                       <Grid
@@ -384,28 +508,58 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
                           key={index}
                           option={option}
                           index={index}
-                          handleAnswer={handleAnswer}
-                          disabledOptions={disabledOptions}
+                          handleAnswer={handleOptionClick}
+                          disabledOptions={
+                            selectedAnswers[currentQuestion] !== undefined
+                              ? [questions[currentQuestion].options.indexOf(selectedAnswers[currentQuestion]!)]
+                              : disabledOptions
+                          }
                           selectedAnswer={selectedAnswer}
                         />
+
+                        {showConfirm && selectedAnswers[currentQuestion] === undefined && (
+                          <ConfirmationDialog
+                            open={showConfirm}
+                            onClose={cancelAnswer}
+                            onConfirm={confirmAnswer}
+                            selectedOption={`Option ${String.fromCharCode(97 + (questions[currentQuestion].options.indexOf(tempSelected ?? "") ?? 0)).toUpperCase()}`}
+                          />
+                        )}
+
+
+
                       </Grid>
                     ))}
                   </Grid>
                   <CardActions sx={{ justifyContent: "space-between", flexDirection: 'column', mt: 3 }}>
                     <Box display="flex" justifyContent="space-evenly" alignItems="center" width="100%">
-                      {quiz_options["5050_lifeline"] && <LifelineButton
-                        onClick={use5050Lifeline}
-                        isDisabled={!lifeline5050 || selectedAnswer !== null}
-                        imageSrc="images/50_50_lifeline_button.png"
-                        label="50:50 Lifeline"
-                      />}
-                      {quiz_options.swap_question && <LifelineButton
-                        onClick={useSwapQuestion}
-                        isDisabled={!swapQuestion || selectedAnswer !== null}
-                        imageSrc="images/50_50_lifeline_button.png"
-                        label="Swap Question"
-                      />}
+                      {quiz_options["5050_lifeline"] && (
+                        <LifelineButton
+                          onClick={use5050Lifeline}
+                          isDisabled={
+                            questions[currentQuestion].options.length !== 4 ||
+                            !lifeline5050 ||
+                            selectedAnswer !== null ||
+                            selectedAnswers[currentQuestion] !== undefined 
+                          }
+                          imageSrc="images/50_50_lifeline_button.png"
+                          label="50:50 Lifeline"
+                        />
+                      )}
+                      {quiz_options.swap_question && (
+                        <LifelineButton
+                          onClick={useSwapQuestion}
+                          isDisabled={
+                            !swapQuestion ||
+                            selectedAnswer !== null ||
+                            selectedAnswers[currentQuestion] !== undefined 
+                          }
+                          imageSrc="images/50_50_lifeline_button.png"
+                          label="Swap Question"
+                        />
+                      )}
                     </Box>
+
                   </CardActions>
                 </>
               ) : (
@@ -468,8 +622,7 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
                     style={{
                       backgroundColor: themeColors.primary,
                       color: "#ffffff",
-                      border: "2px solid white",
-                      borderRadius: '10px'
+                      border: ".5px solid #ffa500",
                       // padding: '12px 20px',
                       // transition: 'background-color 0.3s ease',
                     }}
@@ -520,23 +673,22 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
           />
           <Typography
 
-            variant="body2"
+            variant="body1"
             sx={{
               position: "absolute",
               top: "50%",
               left: "50%",
               transform: "translate(-50%, -50%)",
-              fontSize: "14px",
+              // fontSize: "14px",
               color: "#ffffff",
               letterSpacing: '3.5px',
               // fontFamily:'Share Tech Mono',
-              fontFamily: 'Orbitron',
+              // fontFamily: 'Orbitron',
               textAlign: 'center',
               alignItems: "center", // Center vertically
               justifyContent: "center", // Center horizontally
               fontWeight: "medium",
               display: "flex",
-
               width: "100%",
               textShadow: "0px 2px 4px rgba(0, 0, 0, 0.6)",
             }}

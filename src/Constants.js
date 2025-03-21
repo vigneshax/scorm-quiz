@@ -90,7 +90,7 @@ export const themeColors = {
   primary: "#74347c",
   secondary: "#ec873a",
   success: "#34947c",
-  warning: "#f3e29f",
+  warning: "#ffa500",
   background: "#e1e5e3",
 };
 
