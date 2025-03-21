@@ -89,7 +89,7 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
 
   const [timeLeft, setTimeLeft] = useState(totalTime);
   const [showRulesDialog, setShowRulesDialog] = useState(true);
-  const [ status, setStatus] = useState("");
+  const [ status, setStatus] = useState("unknown");
 
   const getColorBasedOnTime = () => {
     if (timeLeft <= totalTime * 0.2) {
