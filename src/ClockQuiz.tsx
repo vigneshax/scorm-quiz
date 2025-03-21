@@ -89,6 +89,7 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
 
   const [timeLeft, setTimeLeft] = useState(totalTime);
   const [showRulesDialog, setShowRulesDialog] = useState(true);
+  const [ status, setStatus] = useState("");
 
   const getColorBasedOnTime = () => {
     if (timeLeft <= totalTime * 0.2) {
@@ -223,6 +224,7 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
 
       const status = getSCORMValue("cmi.completion_status");
       console.log("Completion Status:", status);
+      setStatus(status);
 
       setSCORMValue("cmi.score.max", "100");
       setSCORMValue("cmi.score.min", "0");
@@ -420,7 +422,7 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
             </Box> */}
 
             {showRulesDialog ? ( // Show loader while loading
-              <RulesDialog open={showRulesDialog}  onClose={handleDialogClose} student={student} rules={quiz_options.rules} />
+              <RulesDialog open={showRulesDialog} status={status}  onClose={handleDialogClose} student={student} rules={quiz_options.rules} />
             ) : (
               !showResult ? (
                 <>
@@ -617,21 +619,9 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
 
 
 
-                  <Button
-                    variant="contained"
-                    style={{
-                      backgroundColor: themeColors.primary,
-                      color: "#ffffff",
-                      border: ".5px solid #ffa500",
-                      // padding: '12px 20px',
-                      // transition: 'background-color 0.3s ease',
-                    }}
-                  // fullWidth
-
-
-                  >
-                    Please close the session...
-                  </Button>
+                  <Typography variant="subtitle2" sx={{ mb: 2,}}>
+                    Please close the session using X icon above...
+                  </Typography>
                 </Box>
               )
             )}

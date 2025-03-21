@@ -4,17 +4,20 @@ import { basePath, themeColors } from '../Constants';
 
 interface RulesDialogProps {
   open: boolean;
+  status: string;
   onClose: () => void;
   student: string | null;
   rules: string[];
 }
 
-const RulesDialog: React.FC<RulesDialogProps> = ({ open, onClose, student, rules }) => {
+const RulesDialog: React.FC<RulesDialogProps> = ({ open, status, onClose, student, rules }) => {
+  const isAttemptAllowed = status === "unknown";
+
   return (
     <Dialog
       open={open}
-      onClose={onClose}
-      maxWidth={false} // Override default width limits
+      onClose={isAttemptAllowed ? onClose : undefined} // Disable closing if quiz is already attempted
+      maxWidth={false} 
       fullWidth
       PaperProps={{
         sx: {
@@ -26,30 +29,40 @@ const RulesDialog: React.FC<RulesDialogProps> = ({ open, onClose, student, rules
         },
       }}
     >
-
       <DialogTitle sx={{ color: themeColors.primary, textAlign: "center", fontWeight: "bold" }}>
         Welcome {student}
       </DialogTitle>
-      <DialogContent>
-        <Typography textAlign="center" sx={{ color: themeColors.warning, mb: 2 }}>
-          Here are the rules:
-        </Typography>
 
-        {rules.map((rule, index) => (
-          <Typography key={index} sx={{ color: "white", mb: 1 }}>
-            <span style={{ color: "#ffa500", fontWeight: "bold" }}>{index + 1}.</span> {rule}
+      <DialogContent>
+        {isAttemptAllowed ? (
+          <>
+            <Typography textAlign="center" sx={{ color: themeColors.warning, mb: 2 }}>
+              Here are the rules:
+            </Typography>
+            {rules.map((rule, index) => (
+              <Typography key={index} sx={{ color: "white", mb: 1 }}>
+                <span style={{ color: "#ffa500", fontWeight: "bold" }}>{index + 1}.</span> {rule}
+              </Typography>
+            ))}
+          </>
+        ) : (
+          <Typography textAlign="center" sx={{ color: "red", fontWeight: "bold", fontSize: "18px" }}>
+            All your attempts are completed. Please close the session.
           </Typography>
-        ))}
+        )}
       </DialogContent>
-      <DialogActions sx={{ justifyContent: "center" }}>
-        <Button
-          onClick={onClose}
-          variant="contained"
-          sx={{ backgroundColor: themeColors.primary, '&:hover': { backgroundColor: themeColors.secondary } }}
-        >
-          Start Quiz
-        </Button>
-      </DialogActions>
+
+      {isAttemptAllowed && (
+        <DialogActions sx={{ justifyContent: "center" }}>
+          <Button
+            onClick={onClose}
+            variant="contained"
+            sx={{ backgroundColor: themeColors.primary, '&:hover': { backgroundColor: themeColors.secondary } }}
+          >
+            Start Quiz
+          </Button>
+        </DialogActions>
+      )}
     </Dialog>
   );
 };
