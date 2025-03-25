@@ -225,11 +225,13 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
       const status = getSCORMValue("cmi.completion_status");
       console.log("Completion Status:", status);
       setStatus(status);
-
+      
+      if (status === "unknown") {
       setSCORMValue("cmi.score.max", "100");
       setSCORMValue("cmi.score.min", "0");
       setSCORMValue("cmi.score.raw", "0");
       setSCORMValue("cmi.completion_status", "incomplete");
+      }
     }
   }, []);
 
