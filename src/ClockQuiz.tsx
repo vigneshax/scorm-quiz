@@ -633,7 +633,7 @@ export function TimerQuiz({ quiz_options }: TimerQuizProps) {
 
       <Box sx={{
         position: "fixed",
-        bottom: 56, // Adjust this value to move it higher above the bottom
+        bottom: 30, // Adjust this value to move it higher above the bottom
         left: "50%",
         transform: "translateX(-50%)", // Centers the button horizontally
         zIndex: 1000, // Ensures it stays above other elements
